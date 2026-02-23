@@ -103,8 +103,9 @@ async function startServer() {
   app.post("/api/auth/signup", (req, res) => {
     const { name, email, password } = req.body;
     try {
-      const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + 1); // 1 day trial
+      // Brazil Time (UTC-3)
+      const now = new Date();
+      const trialEndsAt = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // 24 hours from now
 
       const stmt = db.prepare("INSERT INTO users (name, email, password, trial_ends_at) VALUES (?, ?, ?, ?)");
       const result = stmt.run(name, email, password, trialEndsAt.toISOString());
@@ -137,6 +138,32 @@ async function startServer() {
       });
     } else {
       res.status(401).json({ error: "Credenciais inválidas." });
+    }
+  });
+
+  app.get("/api/auth/status/:id", (req, res) => {
+    const { id } = req.params;
+    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+    if (user) {
+      const now = new Date();
+      
+      const trialEnds = user.trial_ends_at ? new Date(user.trial_ends_at) : null;
+      const isTrialActive = trialEnds ? trialEnds > now : false;
+
+      const subEnds = user.subscription_ends_at ? new Date(user.subscription_ends_at) : null;
+      const isSubActive = subEnds ? subEnds > now : false;
+
+      res.json({ 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        is_subscriber: isSubActive,
+        is_trial_active: isTrialActive,
+        trial_ends_at: user.trial_ends_at,
+        subscription_ends_at: user.subscription_ends_at
+      });
+    } else {
+      res.status(404).json({ error: "Usuário não encontrado." });
     }
   });
 
@@ -221,6 +248,17 @@ async function startServer() {
     const { isFavorite } = req.body;
     db.prepare("UPDATE prompts SET is_favorite = ? WHERE id = ?").run(isFavorite ? 1 : 0, id);
     res.json({ success: true });
+  });
+
+  app.patch("/api/users/:id", (req, res) => {
+    const { id } = req.params;
+    const { name, email } = req.body;
+    try {
+      db.prepare("UPDATE users SET name = ?, email = ? WHERE id = ?").run(name, email, id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({ error: "Erro ao atualizar perfil." });
+    }
   });
 
   // --- Vite Middleware ---

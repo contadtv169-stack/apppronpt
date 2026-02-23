@@ -35,16 +35,17 @@ import {
   FileCode,
   Heart,
   Share2,
-  Globe
+  Globe,
+  Settings
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { supabase } from './lib/supabase';
 
 // --- Types ---
-type IAType = 'Lovable' | 'v0' | 'AI Studio';
-type Category = 'App' | 'Landing Page' | 'Automação' | 'Chatbot' | 'SaaS';
+type IAType = 'Lovable' | 'v0' | 'AI Studio' | 'Bolt.new' | 'Cursor' | 'Windsurf';
+type Category = 'App' | 'Landing Page' | 'Automação' | 'Chatbot' | 'SaaS' | 'Sistema Completo';
 type Level = 'Básico' | 'Intermediário' | 'Avançado' | 'Expert';
-type Tab = 'prompts' | 'logos' | 'chat' | 'images' | 'code';
+type Tab = 'prompts' | 'logos' | 'chat' | 'images' | 'code' | 'community';
 
 interface CommunityPost {
   id: number;
@@ -74,12 +75,30 @@ interface UserData {
   email: string;
   is_subscriber: boolean;
   is_trial_active?: boolean;
-  trial_ends_at?: string;
+  trial_ends_at?: string | null;
+  subscription_ends_at?: string | null;
 }
+
+const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 50, x: '-50%' }}
+    animate={{ opacity: 1, y: 0, x: '-50%' }}
+    exit={{ opacity: 0, y: 20, x: '-50%' }}
+    className={`fixed bottom-24 md:bottom-8 left-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl border ${
+      type === 'success' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-red-500/20 border-red-500/50 text-red-400'
+    }`}
+  >
+    {type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <X className="w-5 h-5" />}
+    <span className="font-medium">{message}</span>
+    <button onClick={onClose} className="ml-2 p-1 hover:bg-white/10 rounded-full transition-colors">
+      <X className="w-4 h-4" />
+    </button>
+  </motion.div>
+);
 
 // --- Components ---
 
-const Navbar = ({ user, onLogout, onNavigate }: { user: UserData | null, onLogout: () => void, onNavigate: (page: string) => void }) => {
+const Navbar = ({ user, onLogout, onNavigate, currentPage }: { user: UserData | null, onLogout: () => void, onNavigate: (page: string) => void, currentPage: string }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -99,15 +118,16 @@ const Navbar = ({ user, onLogout, onNavigate }: { user: UserData | null, onLogou
           <div className="hidden md:flex items-center gap-8">
             {user ? (
               <>
-                <button onClick={() => onNavigate('dashboard')} className="hover:text-blue-400 transition-colors">Dashboard</button>
-                <button onClick={() => onNavigate('history')} className="hover:text-blue-400 transition-colors">Histórico</button>
+                <button onClick={() => onNavigate('dashboard')} className={`hover:text-blue-400 transition-colors ${currentPage === 'dashboard' ? 'text-blue-400' : ''}`}>Dashboard</button>
+                <button onClick={() => onNavigate('community')} className={`hover:text-blue-400 transition-colors ${currentPage === 'community' ? 'text-blue-400' : ''}`}>Comunidade</button>
+                <button onClick={() => onNavigate('history')} className={`hover:text-blue-400 transition-colors ${currentPage === 'history' ? 'text-blue-400' : ''}`}>Histórico</button>
                 <div className="flex items-center gap-4 pl-4 border-l border-white/10">
-                  <div className="flex items-center gap-2">
+                  <button onClick={() => onNavigate('profile')} className="flex items-center gap-2 hover:text-blue-400 transition-all">
                     <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
                       <User className="w-4 h-4 text-blue-400" />
                     </div>
                     <span className="text-sm font-medium">{user.name}</span>
-                  </div>
+                  </button>
                   <button onClick={onLogout} className="p-2 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-all">
                     <LogOut className="w-5 h-5" />
                   </button>
@@ -143,6 +163,7 @@ const Navbar = ({ user, onLogout, onNavigate }: { user: UserData | null, onLogou
               {user ? (
                 <>
                   <button onClick={() => { onNavigate('dashboard'); setIsOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">Dashboard</button>
+                  <button onClick={() => { onNavigate('community'); setIsOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">Comunidade</button>
                   <button onClick={() => { onNavigate('history'); setIsOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">Histórico</button>
                   <button onClick={() => { onLogout(); setIsOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-red-400">Sair</button>
                 </>
@@ -161,61 +182,76 @@ const Navbar = ({ user, onLogout, onNavigate }: { user: UserData | null, onLogou
   );
 };
 
+const MobileNav = ({ user, onNavigate, currentPage }: { user: UserData | null, onNavigate: (page: string) => void, currentPage: string }) => {
+  if (!user) return null;
+
+  return (
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 px-2 pb-safe">
+      <div className="flex justify-between items-center h-16">
+        <button onClick={() => onNavigate('dashboard')} className={`flex-1 flex flex-col items-center gap-1 ${currentPage === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}>
+          <Layout className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase">App</span>
+        </button>
+        <button onClick={() => onNavigate('community')} className={`flex-1 flex flex-col items-center gap-1 ${currentPage === 'community' ? 'text-blue-400' : 'text-slate-500'}`}>
+          <Users className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase">Social</span>
+        </button>
+        <button onClick={() => onNavigate('history')} className={`flex-1 flex flex-col items-center gap-1 ${currentPage === 'history' ? 'text-blue-400' : 'text-slate-500'}`}>
+          <History className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase">Salvos</span>
+        </button>
+        <button onClick={() => onNavigate('profile')} className={`flex-1 flex flex-col items-center gap-1 ${currentPage === 'profile' ? 'text-blue-400' : 'text-slate-500'}`}>
+          <User className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase">Perfil</span>
+        </button>
+        <button onClick={() => onNavigate('home')} className={`flex-1 flex flex-col items-center gap-1 ${currentPage === 'home' ? 'text-blue-400' : 'text-slate-500'}`}>
+          <Globe className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase">Início</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const LandingPage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   return (
     <div className="pt-16">
       {/* Hero Section */}
-      <section className="relative py-20 lg:py-32 overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-full opacity-20 pointer-events-none">
-          <div className="absolute top-0 left-0 w-full h-full bg-blue-500 blur-[120px] rounded-full"></div>
-          <div className="absolute bottom-0 right-0 w-full h-full bg-purple-500 blur-[120px] rounded-full"></div>
+      <section className="relative py-24 lg:py-40 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 blur-[120px] rounded-full animate-pulse"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 blur-[120px] rounded-full animate-pulse delay-700"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5"></div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="text-center max-w-4xl mx-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="text-center max-w-5xl mx-auto">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-bold mb-8 uppercase tracking-wider">
-                <Zap className="w-4 h-4" /> Teste Grátis por 24 Horas
-              </span>
-              <h1 className="text-6xl md:text-8xl font-bold tracking-tighter mb-8 leading-[0.9]">
-                Domine a IA com <span className="gradient-text">Prompts de Elite</span>
+              <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 text-blue-400 text-sm font-bold mb-10 uppercase tracking-[0.2em] backdrop-blur-md">
+                <Sparkles className="w-4 h-4 animate-spin-slow" /> A Revolução da Engenharia de Prompts
+              </div>
+              <h1 className="text-7xl md:text-9xl font-black tracking-tighter mb-10 leading-[0.85] text-white">
+                Crie Sistemas <br />
+                <span className="gradient-text">Completos</span> com IA
               </h1>
-              <p className="text-xl md:text-2xl text-slate-400 mb-12 leading-relaxed max-w-2xl mx-auto">
-                A ferramenta definitiva para desenvolvedores e criadores. Gere prompts que extraem 100% do potencial do Lovable, v0 e AI Studio.
+              <p className="text-xl md:text-3xl text-slate-400 mb-14 leading-relaxed max-w-3xl mx-auto font-medium">
+                A plataforma definitiva para extrair o poder máximo do <span className="text-white">Lovable, v0, Bolt.new e Cursor</span>. Prompts que geram código real, sem erros.
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                <button onClick={() => onNavigate('signup')} className="btn-primary w-full sm:w-auto text-xl px-10 py-5 group">
-                  Começar Teste Grátis <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
+                <button onClick={() => onNavigate('signup')} className="btn-primary w-full sm:w-auto text-2xl px-12 py-6 group shadow-[0_0_50px_rgba(59,130,246,0.3)] hover:shadow-[0_0_70px_rgba(59,130,246,0.5)] transition-all">
+                  Começar Agora Grátis <ArrowRight className="w-7 h-7 group-hover:translate-x-2 transition-transform" />
                 </button>
-                <div className="flex flex-col items-center sm:items-start">
-                  <span className="text-2xl font-bold">R$ 19,90<span className="text-sm text-slate-500 font-normal">/mês</span></span>
-                  <span className="text-xs text-emerald-400 font-medium">Acesso Vitalício ao Histórico</span>
+                <div className="flex flex-col items-center sm:items-start bg-white/5 backdrop-blur-md border border-white/10 p-4 rounded-2xl">
+                  <span className="text-3xl font-black text-white">R$ 19,90<span className="text-sm text-slate-500 font-normal">/mês</span></span>
+                  <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest">Ativação Instantânea via Pix</span>
                 </div>
               </div>
             </motion.div>
           </div>
-
-          {/* Preview Image */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="mt-24 relative"
-          >
-            <div className="glass rounded-3xl p-3 shadow-2xl shadow-blue-500/20 border-white/10">
-              <div className="bg-slate-900 rounded-2xl overflow-hidden aspect-video flex items-center justify-center">
-                 <div className="text-center p-12">
-                    <Bot className="w-24 h-24 text-blue-500 mx-auto mb-6 opacity-50" />
-                    <h3 className="text-3xl font-bold mb-4">Interface Ultra-Moderna</h3>
-                    <p className="text-slate-400 max-w-md mx-auto">Projetado para máxima produtividade em 2026. Simples, rápido e extremamente poderoso.</p>
-                 </div>
-              </div>
-            </div>
-          </motion.div>
         </div>
       </section>
 
@@ -486,14 +522,14 @@ const AuthPage = ({ type, onAuthSuccess, onNavigate }: { type: 'login' | 'signup
   );
 };
 
-const CheckoutPage = ({ user, onPaymentSuccess }: { user: UserData, onPaymentSuccess: () => void }) => {
+const CheckoutPage = ({ user, onPaymentSuccess, notify }: { user: UserData, onPaymentSuccess: () => void, notify: (m: string, t?: 'success' | 'error') => void }) => {
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<any>(null);
   const [status, setStatus] = useState<'pending' | 'completed' | 'expired'>('pending');
   const [cpf, setCpf] = useState('');
 
   const handlePay = async () => {
-    if (!cpf) return alert('Por favor, informe seu CPF para emissão do comprovante.');
+    if (!cpf) return notify('Por favor, informe seu CPF para emissão do comprovante.', 'error');
     setLoading(true);
     try {
       const res = await fetch('/api/payment/create', {
@@ -505,10 +541,10 @@ const CheckoutPage = ({ user, onPaymentSuccess }: { user: UserData, onPaymentSuc
       if (res.ok) {
         setPixData(data);
       } else {
-        alert(data.error);
+        notify(data.error, 'error');
       }
     } catch (err) {
-      alert('Erro ao gerar Pix. Tente novamente em instantes.');
+      notify('Erro ao gerar Pix. Tente novamente em instantes.', 'error');
     } finally {
       setLoading(false);
     }
@@ -537,7 +573,7 @@ const CheckoutPage = ({ user, onPaymentSuccess }: { user: UserData, onPaymentSuc
   const copyToClipboard = () => {
     if (pixData?.qr_code) {
       navigator.clipboard.writeText(pixData.qr_code);
-      alert('Código Pix copiado com sucesso!');
+      notify('Código Pix copiado com sucesso!');
     }
   };
 
@@ -659,13 +695,16 @@ const CheckoutPage = ({ user, onPaymentSuccess }: { user: UserData, onPaymentSuc
   );
 };
 
-const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: string) => void }) => {
+const Dashboard = ({ user, onNavigate, notify }: { user: UserData, onNavigate: (page: string) => void, notify: (m: string, t?: 'success' | 'error') => void }) => {
   const [activeTab, setActiveTab] = useState<Tab>('prompts');
   const [iaType, setIaType] = useState<IAType>('Lovable');
   const [category, setCategory] = useState<Category>('App');
   const [level, setLevel] = useState<Level>('Básico');
   const [appDescription, setAppDescription] = useState('');
   const [appObjective, setAppObjective] = useState('');
+  const [appSpecificCode, setAppSpecificCode] = useState('');
+  const [includeMedia, setIncludeMedia] = useState(false);
+  const [mediaDescription, setMediaDescription] = useState('');
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
@@ -681,23 +720,44 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'bot', text: string }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
 
+  // Image Generation State
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [generatedImage, setGeneratedImage] = useState('');
+  const [imageLoading, setImageLoading] = useState(false);
+
+  // Code Generation State
+  const [codePrompt, setCodePrompt] = useState('');
+  const [generatedFiles, setGeneratedFiles] = useState<{name: string, content: string}[]>([]);
+  const [codeLoading, setCodeLoading] = useState(false);
+
   const generatePrompt = async () => {
     setLoading(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
       const model = ai.models.generateContent({
         model: "gemini-3.1-pro-preview",
-        contents: `Gere um prompt avançado e profissional para a ferramenta de IA ${iaType}. 
+        contents: `Gere um prompt avançado, profissional e EXTREMAMENTE DETALHADO para a ferramenta de IA ${iaType}. 
+        O objetivo é criar um SISTEMA COMPLETO, FUNCIONAL E SEM ERROS.
+        
         Contexto do App: ${appDescription || 'Criação de um sistema moderno'}
         Objetivo da IA: ${appObjective || 'Desenvolver as funcionalidades principais com alta performance'}
+        Código Específico a Gerar: ${appSpecificCode || 'Toda a estrutura necessária para o funcionamento pleno'}
+        Incluir Mídia (Imagens/Vídeos/Logos): ${includeMedia ? `SIM, ${mediaDescription || 'gere placeholders e descrições para mídias ricas'}` : 'NÃO'}
+        
         A categoria é ${category} e o nível de complexidade deve ser ${level}.
-        O prompt deve ser detalhado, estruturado e pronto para uso imediato para obter os melhores resultados possíveis na ferramenta ${iaType}.
-        Responda apenas com o prompt formatado.`
+        
+        Instruções Adicionais:
+        - O prompt deve instruir a IA a gerar código limpo, modular e escalável.
+        - Deve incluir configurações de ambiente, dependências necessárias e estrutura de pastas.
+        - O resultado final deve ser um sistema pronto para produção na plataforma ${iaType}.
+        - Se a plataforma for Cursor ou Windsurf, foque em regras de contexto (.cursorrules) e instruções de refatoração profunda.
+        
+        Responda apenas com o prompt formatado, pronto para ser colado na ferramenta alvo.`
       });
       const response = await model;
       setGeneratedPrompt(response.text || "");
     } catch (err) {
-      alert("Erro ao gerar prompt. Tente novamente.");
+      notify("Erro ao gerar prompt. Tente novamente.", "error");
     } finally {
       setLoading(false);
     }
@@ -724,9 +784,78 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
         }
       }
     } catch (err) {
-      alert("Erro ao gerar logo.");
+      notify("Erro ao gerar logo.", "error");
     } finally {
       setLogoLoading(false);
+    }
+  };
+
+  const generateImage = async () => {
+    if (!imagePrompt) return;
+    setImageLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: [{ parts: [{ text: imagePrompt }] }],
+        config: { imageConfig: { aspectRatio: "1:1" } }
+      });
+      
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          setGeneratedImage(`data:image/png;base64,${part.inlineData.data}`);
+          break;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      notify("Erro ao gerar imagem.", "error");
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  const generateFullApp = async () => {
+    if (!codePrompt) return;
+    setCodeLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: `Gere o código completo para um app baseado na seguinte descrição: ${codePrompt}. 
+        Retorne o resultado em formato JSON estrito, sendo um array de objetos com as propriedades 'name' (nome do arquivo com extensão) e 'content' (conteúdo do arquivo).
+        Exemplo: [{"name": "index.html", "content": "..."}, {"name": "style.css", "content": "..."}]
+        Gere pelo menos 3-5 arquivos essenciais para o funcionamento do app.`,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const files = JSON.parse(response.text || "[]");
+      setGeneratedFiles(files);
+    } catch (err) {
+      console.error(err);
+      notify("Erro ao gerar código do app.", "error");
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
+  const downloadZip = async () => {
+    if (generatedFiles.length === 0) return;
+    try {
+      const res = await fetch('/api/generate-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: generatedFiles })
+      });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'app-completo.zip';
+      a.click();
+    } catch (err) {
+      console.error(err);
+      notify("Erro ao baixar ZIP.", "error");
     }
   };
 
@@ -778,7 +907,7 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
       });
       if (res.ok) {
         setSaveFeedback(true);
-        setTimeout(() => setSaveFeedback(false), 2000);
+        setTimeout(() => setSaveFeedback(false), 3000);
       }
     } catch (err) {
       console.error(err);
@@ -832,6 +961,18 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
         >
           <MessageSquare className="w-4 h-4" /> Chat Especialista
         </button>
+        <button 
+          onClick={() => setActiveTab('images')}
+          className={`px-6 py-2 rounded-xl font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'images' ? 'bg-pink-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+        >
+          <ImageIcon className="w-4 h-4" /> Gerar Imagens
+        </button>
+        <button 
+          onClick={() => setActiveTab('code')}
+          className={`px-6 py-2 rounded-xl font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'code' ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+        >
+          <FileCode className="w-4 h-4" /> Gerar App (ZIP)
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -853,8 +994,8 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-slate-400 mb-3">Ferramenta de IA</label>
-                    <div className="grid grid-cols-1 gap-2">
-                      {(['Lovable', 'v0', 'AI Studio'] as IAType[]).map(type => (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['Lovable', 'v0', 'AI Studio', 'Bolt.new', 'Cursor', 'Windsurf'] as IAType[]).map(type => (
                         <button
                           key={type}
                           onClick={() => setIaType(type)}
@@ -877,7 +1018,7 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
                       onChange={e => setCategory(e.target.value as Category)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-all"
                     >
-                      {['App', 'Landing Page', 'Automação', 'Chatbot', 'SaaS'].map(cat => (
+                      {['App', 'Landing Page', 'Automação', 'Chatbot', 'SaaS', 'Sistema Completo'].map(cat => (
                         <option key={cat} value={cat} className="bg-slate-900">{cat}</option>
                       ))}
                     </select>
@@ -922,6 +1063,43 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-3">Código Específico (Opcional)</label>
+                    <textarea 
+                      value={appSpecificCode}
+                      onChange={e => setAppSpecificCode(e.target.value)}
+                      placeholder="Ex: Use Prisma para o banco de dados e Tailwind para o estilo..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-all text-sm h-24 resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10">
+                    <input 
+                      type="checkbox" 
+                      id="media"
+                      checked={includeMedia}
+                      onChange={e => setIncludeMedia(e.target.checked)}
+                      className="w-5 h-5 rounded border-white/10 bg-transparent text-blue-500 focus:ring-blue-500"
+                    />
+                    <label htmlFor="media" className="text-sm font-medium text-slate-300 cursor-pointer">Incluir Mídia (Imagens/Vídeos/Logo)</label>
+                  </div>
+
+                  {includeMedia && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="space-y-3"
+                    >
+                      <label className="block text-sm font-medium text-slate-400">Descrição da Mídia/Logo</label>
+                      <textarea 
+                        value={mediaDescription}
+                        onChange={e => setMediaDescription(e.target.value)}
+                        placeholder="Ex: Logo minimalista azul, fotos de alta qualidade de escritórios..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-all text-sm h-20 resize-none"
+                      />
+                    </motion.div>
+                  )}
+
                   <button 
                     onClick={generatePrompt}
                     disabled={loading}
@@ -963,12 +1141,20 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
                       onClick={handleSave}
                       disabled={!generatedPrompt}
                       className={`p-2 rounded-lg transition-all flex items-center gap-2 text-sm ${
-                        saveFeedback ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-white/5 text-slate-400 hover:text-white'
+                        saveFeedback ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-white/5 text-slate-400 hover:text-white'
                       }`}
                     >
                       {saveFeedback ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                      {saveFeedback ? 'Salvo!' : 'Salvar'}
+                      {saveFeedback ? 'Salvo no Histórico!' : 'Salvar'}
                     </button>
+                    {saveFeedback && (
+                      <button 
+                        onClick={() => onNavigate('history')}
+                        className="text-xs text-blue-400 hover:underline animate-pulse"
+                      >
+                        Ver Histórico
+                      </button>
+                    )}
                   </div>
                 </div>
                 
@@ -1108,6 +1294,132 @@ const Dashboard = ({ user, onNavigate }: { user: UserData, onNavigate: (page: st
                 >
                   <ArrowRight className="w-6 h-6" />
                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'images' && (
+          <motion.div 
+            key="images"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="grid lg:grid-cols-2 gap-8"
+          >
+            <div className="glass p-8 rounded-2xl space-y-6">
+              <h3 className="text-2xl font-bold">Gerador de Imagens AI</h3>
+              <p className="text-slate-400">Crie imagens incríveis para seu app ou redes sociais.</p>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">O que você quer criar?</label>
+                <textarea 
+                  value={imagePrompt}
+                  onChange={e => setImagePrompt(e.target.value)}
+                  placeholder="Ex: Uma interface de aplicativo de entrega de comida, estilo futurista, 4k, ultra detalhado..."
+                  className="w-full h-32 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-pink-500 transition-all resize-none"
+                />
+              </div>
+
+              <button 
+                onClick={generateImage}
+                disabled={imageLoading}
+                className="btn-primary w-full py-4 bg-gradient-to-r from-pink-600 to-rose-600"
+              >
+                {imageLoading ? 'Gerando Imagem...' : 'Gerar Imagem de Alta Qualidade'}
+              </button>
+            </div>
+
+            <div className="glass rounded-2xl flex items-center justify-center p-8 min-h-[400px]">
+              {generatedImage ? (
+                <div className="text-center space-y-6">
+                  <img src={generatedImage} alt="Generated" className="max-w-full h-auto rounded-xl shadow-2xl" />
+                  <button 
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = generatedImage;
+                      link.download = 'imagem-appprompt.png';
+                      link.click();
+                    }}
+                    className="btn-secondary"
+                  >
+                    Baixar Imagem
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center text-slate-500 space-y-4">
+                  <ImageIcon className="w-16 h-16 mx-auto opacity-10" />
+                  <p>Sua imagem aparecerá aqui.</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'code' && (
+          <motion.div 
+            key="code"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="grid lg:grid-cols-3 gap-8"
+          >
+            <div className="lg:col-span-1 glass p-8 rounded-2xl space-y-6">
+              <h3 className="text-2xl font-bold">Gerador de App Completo</h3>
+              <p className="text-slate-400">Descreva seu sistema e a IA criará todos os arquivos necessários.</p>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">Descrição do App</label>
+                <textarea 
+                  value={codePrompt}
+                  onChange={e => setCodePrompt(e.target.value)}
+                  placeholder="Ex: Um site de portfólio pessoal com 3 páginas: Início, Projetos e Contato. Use HTML, CSS e JS puro."
+                  className="w-full h-48 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-all resize-none"
+                />
+              </div>
+
+              <button 
+                onClick={generateFullApp}
+                disabled={codeLoading}
+                className="btn-primary w-full py-4"
+              >
+                {codeLoading ? 'Gerando Arquivos...' : 'Gerar Sistema Completo'}
+              </button>
+            </div>
+
+            <div className="lg:col-span-2 glass rounded-2xl flex flex-col min-h-[500px]">
+              <div className="p-4 border-b border-white/5 flex justify-between items-center">
+                <span className="text-sm font-medium text-slate-400">Arquivos Gerados</span>
+                {generatedFiles.length > 0 && (
+                  <button 
+                    onClick={downloadZip}
+                    className="btn-primary py-2 px-4 text-xs flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" /> Baixar Projeto (ZIP)
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 p-6 overflow-y-auto">
+                {generatedFiles.length > 0 ? (
+                  <div className="space-y-4">
+                    {generatedFiles.map((file, i) => (
+                      <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/10">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileCode className="w-4 h-4 text-blue-400" />
+                          <span className="text-sm font-bold">{file.name}</span>
+                        </div>
+                        <pre className="text-xs text-slate-500 overflow-x-auto p-2 bg-black/20 rounded-lg">
+                          {file.content.substring(0, 200)}...
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4">
+                    <FileCode className="w-16 h-16 opacity-10" />
+                    <p>Os arquivos do seu projeto aparecerão aqui.</p>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -1273,34 +1585,348 @@ const HistoryPage = ({ user }: { user: UserData }) => {
   );
 };
 
+const CommunityPage = ({ user, notify }: { user: UserData, notify: (m: string, t?: 'success' | 'error') => void }) => {
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newPost, setNewPost] = useState({ title: '', content: '', type: 'prompt' as const });
+  const [showModal, setShowModal] = useState(false);
+
+  const fetchPosts = async () => {
+    try {
+      const res = await fetch('/api/community');
+      const data = await res.json();
+      setPosts(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const handleCreatePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/community', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newPost, userId: user.id })
+      });
+      if (res.ok) {
+        setShowModal(false);
+        setNewPost({ title: '', content: '', type: 'prompt' });
+        fetchPosts();
+        notify('Postagem criada com sucesso!');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleLike = async (id: number) => {
+    try {
+      await fetch(`/api/community/like/${id}`, { method: 'POST' });
+      setPosts(posts.map(p => p.id === id ? { ...p, likes: p.likes + 1 } : p));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="pt-24 pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className="flex justify-between items-center mb-12">
+        <div>
+          <h2 className="text-4xl font-bold tracking-tight mb-2">Comunidade <span className="gradient-text">AppPrompt</span></h2>
+          <p className="text-slate-400">Compartilhe prompts e códigos que funcionam.</p>
+        </div>
+        <button 
+          onClick={() => setShowModal(true)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Share2 className="w-5 h-5" /> Compartilhar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-8">
+          {posts.map(post => (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={post.id}
+              className="glass p-8 rounded-3xl border-white/5 hover:border-white/10 transition-all"
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <User className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold">{post.author_name}</h4>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+                      {new Date(post.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${post.type === 'prompt' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                  {post.type}
+                </span>
+              </div>
+              <h3 className="text-xl font-bold mb-4">{post.title}</h3>
+              <div className="bg-black/20 rounded-xl p-4 mb-6 max-h-48 overflow-y-auto">
+                <pre className="text-sm text-slate-400 whitespace-pre-wrap font-mono">{post.content}</pre>
+              </div>
+              <div className="flex justify-between items-center">
+                <button 
+                  onClick={() => handleLike(post.id)}
+                  className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-all"
+                >
+                  <Heart className="w-5 h-5" /> {post.likes}
+                </button>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(post.content);
+                    notify('Copiado para sua área de transferência!');
+                  }}
+                  className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-all text-sm font-bold"
+                >
+                  <Copy className="w-4 h-4" /> USAR ESTE {post.type.toUpperCase()}
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Create Post Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="glass p-8 rounded-[2.5rem] w-full max-w-2xl relative z-10"
+            >
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-bold">Compartilhar com a Comunidade</h3>
+                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/5 rounded-full">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <form onSubmit={handleCreatePost} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Título</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newPost.title}
+                    onChange={e => setNewPost({ ...newPost, title: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500"
+                    placeholder="Ex: Prompt para SaaS de Delivery"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Tipo</label>
+                  <div className="flex gap-4">
+                    {['prompt', 'code'].map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setNewPost({ ...newPost, type: t as any })}
+                        className={`flex-1 py-3 rounded-xl border transition-all uppercase text-xs font-bold tracking-widest ${newPost.type === t ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Conteúdo</label>
+                  <textarea 
+                    required
+                    value={newPost.content}
+                    onChange={e => setNewPost({ ...newPost, content: e.target.value })}
+                    className="w-full h-48 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 resize-none"
+                    placeholder="Cole aqui o seu prompt ou código..."
+                  />
+                </div>
+                <button type="submit" className="btn-primary w-full py-4">Publicar Agora</button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const ProfilePage = ({ user, onUpdate, notify }: { user: UserData, onUpdate: (data: UserData) => void, notify: (m: string, t?: 'success' | 'error') => void }) => {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [loading, setLoading] = useState(false);
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email })
+      });
+      if (res.ok) {
+        const updated = { ...user, name, email };
+        onUpdate(updated);
+        notify('Perfil atualizado com sucesso!');
+      }
+    } catch (err) {
+      notify('Erro ao atualizar perfil.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  };
+
+  return (
+    <div className="pt-24 pb-24 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
+      <div className="mb-12">
+        <h2 className="text-4xl font-bold tracking-tight mb-2">Seu <span className="gradient-text">Perfil</span></h2>
+        <p className="text-slate-400">Gerencie suas informações e assinatura.</p>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-8">
+        <div className="md:col-span-2 space-y-8">
+          <div className="glass p-8 rounded-[2rem] border-white/5">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-blue-400" /> Dados Pessoais
+            </h3>
+            <form onSubmit={handleUpdate} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">Nome Completo</label>
+                <input 
+                  type="text" 
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">E-mail</label>
+                <input 
+                  type="email" 
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="btn-primary w-full py-4"
+              >
+                {loading ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          <div className="glass p-8 rounded-[2rem] border-white/5">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-purple-400" /> Assinatura
+            </h3>
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Status</p>
+                <p className="text-sm font-bold flex items-center gap-2">
+                  {user.is_subscriber ? (
+                    <><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Plano Pro Ativo</>
+                  ) : user.is_trial_active ? (
+                    <><span className="w-2 h-2 rounded-full bg-blue-500"></span> Teste Grátis (24h)</>
+                  ) : (
+                    <><span className="w-2 h-2 rounded-full bg-red-500"></span> Expirado</>
+                  )}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Vencimento (Horário Brasília)</p>
+                <p className="text-sm font-medium">
+                  {user.is_subscriber ? formatDate(user.subscription_ends_at) : formatDate(user.trial_ends_at)}
+                </p>
+              </div>
+              {!user.is_subscriber && (
+                <button className="btn-primary w-full py-3 text-sm bg-gradient-to-r from-purple-600 to-pink-600">
+                  Assinar Agora
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
   const [page, setPage] = useState('home');
   const [user, setUser] = useState<UserData | null>(null);
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   useEffect(() => {
     const savedUser = localStorage.getItem('appprompt_user');
     if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      // Verify status with server
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: parsedUser.email, password: parsedUser.password })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.id) {
-          setUser(data);
-          localStorage.setItem('appprompt_user', JSON.stringify(data));
-          if (!data.is_subscriber && !data.is_trial_active) {
-            setPage('checkout');
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        // Verify status with server
+        fetch(`/api/auth/status/${parsedUser.id}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Auth failed');
+          return res.json();
+        })
+        .then(data => {
+          if (data.id) {
+            setUser(data);
+            localStorage.setItem('appprompt_user', JSON.stringify(data));
+            if (!data.is_subscriber && !data.is_trial_active) {
+              setPage('checkout');
+            }
           }
-        }
-      })
-      .catch(err => console.error('Error verifying user:', err));
+        })
+        .catch(err => {
+          console.error('Error verifying user:', err);
+          setUser(null);
+          localStorage.removeItem('appprompt_user');
+        });
+      } catch (e) {
+        localStorage.removeItem('appprompt_user');
+      }
     }
   }, []);
 
@@ -1331,16 +1957,18 @@ export default function App() {
       case 'home': return <LandingPage onNavigate={setPage} />;
       case 'login': return <AuthPage type="login" onAuthSuccess={handleAuthSuccess} onNavigate={setPage} />;
       case 'signup': return <AuthPage type="signup" onAuthSuccess={handleAuthSuccess} onNavigate={setPage} />;
-      case 'checkout': return user ? <CheckoutPage user={user} onPaymentSuccess={handlePaymentSuccess} /> : <LandingPage onNavigate={setPage} />;
-      case 'dashboard': return (user?.is_subscriber || user?.is_trial_active) ? <Dashboard user={user} onNavigate={setPage} /> : <CheckoutPage user={user!} onPaymentSuccess={handlePaymentSuccess} />;
-      case 'history': return (user?.is_subscriber || user?.is_trial_active) ? <HistoryPage user={user} /> : <CheckoutPage user={user!} onPaymentSuccess={handlePaymentSuccess} />;
+      case 'checkout': return user ? <CheckoutPage user={user} onPaymentSuccess={handlePaymentSuccess} notify={notify} /> : <LandingPage onNavigate={setPage} />;
+      case 'dashboard': return (user?.is_subscriber || user?.is_trial_active) ? <Dashboard user={user} onNavigate={setPage} notify={notify} /> : <CheckoutPage user={user!} onPaymentSuccess={handlePaymentSuccess} notify={notify} />;
+      case 'history': return (user?.is_subscriber || user?.is_trial_active) ? <HistoryPage user={user} /> : <CheckoutPage user={user!} onPaymentSuccess={handlePaymentSuccess} notify={notify} />;
+      case 'community': return (user?.is_subscriber || user?.is_trial_active) ? <CommunityPage user={user} notify={notify} /> : <CheckoutPage user={user!} onPaymentSuccess={handlePaymentSuccess} notify={notify} />;
+      case 'profile': return user ? <ProfilePage user={user} onUpdate={(data) => { setUser(data); localStorage.setItem('appprompt_user', JSON.stringify(data)); }} notify={notify} /> : <LandingPage onNavigate={setPage} />;
       default: return <LandingPage onNavigate={setPage} />;
     }
   };
 
   return (
-    <div className="min-h-screen">
-      <Navbar user={user} onLogout={handleLogout} onNavigate={setPage} />
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <Navbar user={user} onLogout={handleLogout} onNavigate={setPage} currentPage={page} />
       <AnimatePresence mode="wait">
         <motion.main
           key={page}
@@ -1348,9 +1976,21 @@ export default function App() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -10 }}
           transition={{ duration: 0.2 }}
+          className="pb-24 md:pb-0"
         >
           {renderPage()}
         </motion.main>
+      </AnimatePresence>
+      <MobileNav user={user} onNavigate={setPage} currentPage={page} />
+      
+      <AnimatePresence>
+        {notification && (
+          <Toast 
+            message={notification.message} 
+            type={notification.type} 
+            onClose={() => setNotification(null)} 
+          />
+        )}
       </AnimatePresence>
     </div>
   );
